@@ -1,0 +1,125 @@
+#!/usr/bin/python
+
+#
+# This script is meant to speed up the process of creating the n-tuples from
+# the offline files.
+#
+# It does the followint :
+#  - splits up the list of r-hadron into smaller chunks
+#  - creates EventFileReader.xml and bootstrap_AMIGA.xml and RHadExporter corresponding to the smaller lists
+#  - submits the jobs
+#
+# Specify how many jobs you want to run in parallel in the numJobs variable (below)
+#
+
+import os
+
+numJobs = 5 
+#fileList = 'jobListEntire.txt'
+fileList = 'zzProtonInput1'
+logPrefix = 'Proton18-20-Q-log'
+tuplePrefix = 'Proton18-20-Q-Tuple'
+savedir='/scratch/carlocruz/'
+
+
+rFiles = open(fileList, 'r')
+fileList = rFiles.readlines()
+rFiles.close()
+
+# not exactly right, but doesn't matter if we miss a few files
+linesPerFile = len(fileList) / numJobs
+
+start = 0
+stop = linesPerFile
+outFileNumber = 0
+
+bootList = []
+
+while outFileNumber < numJobs :
+    outFileNumber = outFileNumber + 1
+    outFileName = 'EventFileReader-' + str(outFileNumber) + '.xml'
+    outFileList = fileList[start:stop+1]
+
+    outCopy=open('input-%s.txt' % outFileNumber,'w')
+    
+    outFileString = ''
+    for f in outFileList:
+        g = savedir+f.split('/')[-1]
+        outFileString = outFileString + g
+        outCopy.write(f)
+
+    outCopy.close()
+
+    inEfr = open('EventFileReader-TEMPLATE.xml', 'r')
+    outEfr = open(outFileName, 'w')
+    o = ''
+    
+    for l in inEfr:
+        o = o + l.replace('FILENAMES-TO-BE-REPLACED', outFileString)
+
+    outEfr.writelines(o)
+    outEfr.close()
+    inEfr.close()
+    
+    outConfigFileName = 'RHadExporter-' + str(outFileNumber) + '.xml'
+    inConfig = open('RHadExporter-TEMPLATE.xml','r')
+    outConfig = open(outConfigFileName, 'w')
+    c = ''
+
+    nTupleFile = savedir+tuplePrefix + str(outFileNumber) + '.root'
+
+    for l in inConfig:
+        c = c + l.replace('NTUPLE-FILE-TO-BE-REPLACED', nTupleFile)
+        
+    outConfig.writelines(c)
+    outConfig.close()
+    inConfig.close()
+
+
+    adstConfigFileName = 'RecDataWriterNG-' + str(outFileNumber) + '.xml'
+    inadstConfig = open('RecDataWriterNG-TEMPLATE.xml','r')
+    outadstConfig = open(adstConfigFileName, 'w')
+    c = ''
+
+    adstFile = savedir+tuplePrefix + str(outFileNumber) + 'ADST.root'
+
+    for l in inadstConfig:
+        c = c + l.replace('ADST-FILENAME-TO-BE-REPLACED', adstFile)
+        
+    outadstConfig.writelines(c)
+    outadstConfig.close()
+    inadstConfig.close()
+
+
+    outBootFileName = 'bootstrap_AMIGA-' + str(outFileNumber) + '.xml'
+    bootList.append(outBootFileName)
+    inBoot = open('bootstrap_AMIGA-TEMPLATE.xml', 'r')
+    outBoot = open(outBootFileName, 'w')
+    b = ''
+
+    for l in inBoot :
+        b = b + l.replace('EVENT-FILE-READER-TO-BE-REPLACED', outFileName).replace('RHAD-EXPORTER-TO-BE-REPLACED', outConfigFileName).replace('ADST-FILENAME-TO-BE-REPLACED', adstConfigFileName)
+
+    outBoot.writelines(b)
+    inBoot.close()
+    outBoot.close()
+    
+    start = stop + 1
+    stop = start + linesPerFile
+
+    
+    outFile=open('output-%s.txt' % outFileNumber,'w')
+    outFile.write('%s\t%s' %( nTupleFile,savedir+logPrefix+'-%s.log' % outFileNumber ))
+    outFile.close()
+
+    outFileadst=open('outputadst-%s.txt' % outFileNumber,'w')
+    outFileadst.write('%s\t%s' %( adstFile,savedir+logPrefix+'-%s.log' % outFileNumber ))
+    outFileadst.close()
+
+msg = 'Would you like me to submit the jobs? [y/n]'
+y_n = raw_input(msg)
+if y_n == 'y' :
+    cmd = 'qsub -t 1-%s submit.sh ' % numJobs
+    print cmd
+    os.system(cmd)
+   
