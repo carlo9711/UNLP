@@ -1,0 +1,70 @@
+#!/bin/sh
+#
+# EXAMPLE OPEN MPI SCRIPT FOR SGE
+# Modified by Basement Supercomputing 1/2/2006 DJE
+# To use, change "OMPI_JOB", "NUMBER_OF_CPUS"
+# and "OMPI_PROGRAM_NAME" to real values.
+#
+# Your job name
+#$ -N Iron18_20
+#
+# Use current working directory
+#$ -cwd
+#
+# Join stdout and stderr
+#$ -j y
+#
+# Run job through bash shell
+#$ -S /bin/bash
+#
+# Use Auger queue:
+#$ -q auger.q
+WORKING_DIR=`pwd`
+echo $SGE_TASK_ID
+DATA_DIR_BASE=/scratch/carlocruz/DEL-TASK$SGE_TASK_ID/
+#DATA_DIR="$DATA_DIR_BASE/$SGE_TASK_ID"
+DATA_DIR="$DATA_DIR_BASE"
+
+echo $DATA_DIR_BASE
+echo $DATA_DIR
+
+echo "$@"
+
+if [ ! -d $DATA_DIR_BASE ]; then
+   mkdir -p $DATA_DIR_BASE
+fi
+
+if [ ! -d $DATA_DIR ]; then
+   mkdir $DATA_DIR
+fi
+
+echo $WORKING_DIR
+
+name=$(head -n $SGE_TASK_ID $1| tail -n 1)
+echo $name
+   scp nodo014.inv.usc.es:$name $DATA_DIR
+echo $name
+
+namescratch=$DATA_DIR${name/*\//}
+nameborrar=/${name/*\//}
+copiarfile=${name/$nameborrar/}
+
+echo $namescratch
+logfile=${namescratch/.grdpcles/.log}
+offlinefile=${namescratch/.grdpcles/-offline.root}
+
+echo $logfile
+echo $offlinefile
+echo $adstfile
+echo $namescratch
+echo $copiarfile
+
+sed -e "s@INPUT-FILENAME-TO-BE-REPLACED@$namescratch@; s@OUTPUT-FILENAME-TO-BE-REPLACED@$offlinefile@" ./XML/bootstrap_AMIGA.xml > ./XML/bootstrap_AMIGA-$SGE_TASK_ID.xml
+
+bash
+source /home2/carlos.cruz/setvars_v3r3_branch.sh
+
+$WORKING_DIR/userAugerOffline -b ./XML/bootstrap_AMIGA-$SGE_TASK_ID.xml > $logfile 2>&1
+
+scp  $logfile $offlinefile $adstfile nodo014.inv.usc.es:$copiarfile
+rm -rf $DATA_DIR_BASE
